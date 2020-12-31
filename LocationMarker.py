@@ -110,13 +110,13 @@ PREFIX = '!!loc'
 HELP_MESSAGE = '''
 --------- MCDR 路标插件 v20201231 ---------
 一个支持多槽位的快速§a备份§r&§c回档§r插件
-§d【格式说明】§r
 §7{0}§r 显示此帮助信息
 §7{0} <all|list>§r 列出所有路标
 §7{0} search §b<关键字>§r 搜索坐标，返回所有匹配项
-§7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<注释>]§r 加入一个路标
-§7{0} add §b<路标名称> §ehere §6[<注释>]§r 加入自己所处位置、维度的路标
+§7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
+§7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
 §7{0} del §b<路标名称>§r 删除路标，要求全字匹配
+其中§e<维度id>§r为: 主世界 0, 下界 -1, 末地 1
 '''.strip().format(PREFIX)
 STORAGE_FILE_PATH = os.path.join('plugins', 'LocationMarker', 'locations.json')
 storage = LocationStorage(STORAGE_FILE_PATH)
