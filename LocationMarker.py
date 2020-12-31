@@ -229,7 +229,7 @@ class Executor:
 					then(Number('x').
 						then(Number('y').
 							then(Number('z').
-								then(Integer('dim').
+								then(Integer('dim').in_range(-1, 1).
 									run(lambda ctx: add_location(self.server, self.info, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'])).
 									then(GreedyText('desc').
 										run(lambda ctx: add_location(self.server, self.info, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'], ctx['desc']))
