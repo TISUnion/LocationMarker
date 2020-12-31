@@ -112,13 +112,15 @@ HELP_MESSAGE = '''
 --------- MCDR 路标插件 v20201231 ---------
 一个位于服务端的路标管理插件
 §7{0}§r 显示此帮助信息
-§7{0} list§r 列出所有路标
-§7{0} list §6<页号>§r 以每{1}个路标为一页，列出指定§6页号§r的路标
-§7{0} search §b<关键字>§r 搜索坐标，返回所有匹配项
+§7{0} list §6[<可选页号>]§r 列出所有路标
+§7{0} search §b<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项
 §7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
 §7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
 §7{0} del §b<路标名称>§r 删除路标，要求全字匹配
-其中§e<维度id>§r为: 主世界 0, 下界 -1, 末地 1
+其中：
+当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
+§b关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
+§e维度id§r参考: 主世界为§e0§r, 下界为§e-1§r, 末地为§e1§r
 '''.strip().format(PREFIX, ITEM_PER_PAGE)
 STORAGE_FILE_PATH = os.path.join('plugins', 'LocationMarker', 'locations.json')
 
@@ -169,7 +171,7 @@ def list_locations(server, info, keyword=None, page=None):
 	else:
 		left, right = (page - 1) * ITEM_PER_PAGE, page * ITEM_PER_PAGE
 		for i in range(left, right):
-			if 0 < i < len(matched_locations):
+			if 0 <= i < matched_count:
 				print_location(server, info, matched_locations[i])
 
 		has_prev = 0 < left < matched_count
@@ -244,8 +246,11 @@ class Executor:
 				)
 			). \
 			then(Literal('search').
-				then(GreedyText('keyword').
-					run(lambda ctx: list_locations(self.server, self.info, keyword=ctx['keyword']))
+				then(QuotableText('keyword').
+					run(lambda ctx: list_locations(self.server, self.info, keyword=ctx['keyword'])).
+					then(Integer('page').
+						run(lambda ctx: list_locations(self.server, self.info, keyword=ctx['keyword'], page=ctx['page']))
+					)
 				)
 			). \
 			then(Literal('add').
