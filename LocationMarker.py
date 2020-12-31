@@ -162,6 +162,7 @@ def list_locations(server, info, keyword=None, page=None):
 	for loc in storage.get_locations():
 		if keyword is None or loc.name.find(keyword) != -1 or (loc.description is not None and loc.description.find(keyword) != -1):
 			matched_locations.append(loc)
+	matched_count = len(matched_locations)
 	if page is None:
 		for loc in matched_locations:
 			print_location(server, info, loc)
@@ -171,8 +172,8 @@ def list_locations(server, info, keyword=None, page=None):
 			if 0 < i < len(matched_locations):
 				print_location(server, info, matched_locations[i])
 
-		has_prev = left > 0
-		has_next = right < len(matched_locations)
+		has_prev = 0 < left < matched_count
+		has_next = 0 < right < matched_count
 		color = {False: RColor.dark_gray, True: RColor.gray}
 		prev_page = RText('<-', color=color[has_prev])
 		if has_prev:
@@ -187,9 +188,9 @@ def list_locations(server, info, keyword=None, page=None):
 			next_page
 		))
 	if keyword is None:
-		server.reply(info, '共有§6{}§r个路标'.format(len(matched_locations)))
+		server.reply(info, '共有§6{}§r个路标'.format(matched_count))
 	else:
-		server.reply(info, '共找到§6{}§r个路标'.format(len(matched_locations)))
+		server.reply(info, '共找到§6{}§r个路标'.format(matched_count))
 
 
 def add_location(server, info, name, x, y, z, dim, desc=None):
