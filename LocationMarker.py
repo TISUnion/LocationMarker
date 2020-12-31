@@ -107,18 +107,21 @@ class LocationStorage:
 
 
 PREFIX = '!!loc'
+ITEM_PER_PAGE = 10
 HELP_MESSAGE = '''
 --------- MCDR 路标插件 v20201231 ---------
 一个位于服务端的路标管理插件
 §7{0}§r 显示此帮助信息
-§7{0} <all | list>§r 列出所有路标
+§7{0} list§r 列出所有路标
+§7{0} list §6<页号>§r 以每{1}个路标为一页，列出指定§6页号§r的路标
 §7{0} search §b<关键字>§r 搜索坐标，返回所有匹配项
 §7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
 §7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
 §7{0} del §b<路标名称>§r 删除路标，要求全字匹配
 其中§e<维度id>§r为: 主世界 0, 下界 -1, 末地 1
-'''.strip().format(PREFIX)
+'''.strip().format(PREFIX, ITEM_PER_PAGE)
 STORAGE_FILE_PATH = os.path.join('plugins', 'LocationMarker', 'locations.json')
+
 storage = LocationStorage(STORAGE_FILE_PATH)
 
 
@@ -154,16 +157,39 @@ def print_location(server, info, location):
 	))
 
 
-def list_locations(server, info, keyword=None):
-	count = 0
+def list_locations(server, info, keyword=None, page=None):
+	matched_locations = []
 	for loc in storage.get_locations():
 		if keyword is None or loc.name.find(keyword) != -1 or (loc.description is not None and loc.description.find(keyword) != -1):
+			matched_locations.append(loc)
+	if page is None:
+		for loc in matched_locations:
 			print_location(server, info, loc)
-			count += 1
-	if keyword is None:
-		server.reply(info, '共有§6{}§r个路标'.format(count))
 	else:
-		server.reply(info, '共找到§6{}§r个路标'.format(count))
+		left, right = (page - 1) * ITEM_PER_PAGE, page * ITEM_PER_PAGE
+		for i in range(left, right):
+			if 0 < i < len(matched_locations):
+				print_location(server, info, matched_locations[i])
+
+		has_prev = left > 0
+		has_next = right < len(matched_locations)
+		color = {False: RColor.dark_gray, True: RColor.gray}
+		prev_page = RText('<-', color=color[has_prev])
+		if has_prev:
+			prev_page.c(RAction.run_command, '{} list {}'.format(PREFIX, page - 1)).h('点击显示上一页')
+		next_page = RText('->', color=color[has_next])
+		if has_next:
+			next_page.c(RAction.run_command, '{} list {}'.format(PREFIX, page + 1)).h('点击显示下一页')
+
+		server.reply(info, RTextList(
+			prev_page,
+			' 第§6{}§r页 '.format(page),
+			next_page
+		))
+	if keyword is None:
+		server.reply(info, '共有§6{}§r个路标'.format(len(matched_locations)))
+	else:
+		server.reply(info, '共找到§6{}§r个路标'.format(len(matched_locations)))
 
 
 def add_location(server, info, name, x, y, z, dim, desc=None):
@@ -208,14 +234,17 @@ class Executor:
 		self.executor = Literal(PREFIX). \
 			run(lambda ctx: show_help(self.server, self.info)). \
 			then(Literal('all').
-				run(lambda ctx: list_locations(self.server, self.info, None))
+				run(lambda ctx: list_locations(self.server, self.info))
 			). \
 			then(Literal('list').
-				run(lambda ctx: list_locations(self.server, self.info, None))
+				run(lambda ctx: list_locations(self.server, self.info)).
+				then(Integer('page').
+					run(lambda ctx: list_locations(self.server, self.info, page=ctx['page']))
+				)
 			). \
 			then(Literal('search').
 				then(GreedyText('keyword').
-					run(lambda ctx: list_locations(self.server, self.info, ctx['keyword']))
+					run(lambda ctx: list_locations(self.server, self.info, keyword=ctx['keyword']))
 				)
 			). \
 			then(Literal('add').
