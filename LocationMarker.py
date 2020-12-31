@@ -109,7 +109,7 @@ class LocationStorage:
 PREFIX = '!!loc'
 HELP_MESSAGE = '''
 --------- MCDR 路标插件 v20201231 ---------
-一个支持多槽位的快速§a备份§r&§c回档§r插件
+一个位于服务端的路标管理插件
 §7{0}§r 显示此帮助信息
 §7{0} <all|list>§r 列出所有路标
 §7{0} search §b<关键字>§r 搜索坐标，返回所有匹配项
