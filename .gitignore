@@ -1,5 +1,5 @@
 .idea/
 utils/
-plugins/
+command_builder.py
 locations.json
 locations.py
