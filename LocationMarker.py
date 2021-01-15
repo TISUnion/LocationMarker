@@ -15,7 +15,7 @@ PLUGIN_METADATA = {
 	'author': 'Fallen_Breath',
 	'link': 'https://github.com/TISUnion/LocationMarker',
 	'dependencies': {
-		'mcdreforged': '>=1.0.0-alpha.8',
+		'minecraft_data_api': '*',
 	}
 }
 
@@ -229,12 +229,10 @@ def add_location_here(source: CommandSource, name, desc=None):
 	if not isinstance(source, PlayerCommandSource):
 		source.reply('仅有玩家允许使用本指令')
 		return
-	api = source.get_server().get_plugin_instance('player_info_api')
-	pos = api.get_player_info(source.player, 'Pos')
-	dim = api.get_player_info(source.player, 'Dimension')
-	if type(dim) is str:  # 1.16+
-		dim = {'minecraft:overworld': 0, 'minecraft:the_nether': -1, 'minecraft:the_end': 1}[dim]
-	add_location(source, name, pos[0], pos[1], pos[2], dim, desc)
+	api = source.get_server().get_plugin_instance('minecraft_data_api')
+	pos = api.get_player_coordinate(source.player)
+	dim = api.get_player_dimension(source.player)
+	add_location(source, name, pos.x, pos.y, pos.z, dim, desc)
 
 
 def delete_location(source: CommandSource, name):
