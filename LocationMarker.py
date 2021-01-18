@@ -1,15 +1,15 @@
 import collections
 import json
 import os
+from json import JSONDecodeError
 from threading import RLock
-from typing import List, Callable, Any
+from typing import List, Callable, Any, Dict, Optional, Union
 
 from mcdreforged.api.all import *
 
-
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.0.0',
+	'version': '1.1.0',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
 	'author': 'Fallen_Breath',
@@ -23,29 +23,50 @@ Point = collections.namedtuple('Point', 'x y z')
 Location = collections.namedtuple('Location', 'name description dimension position')
 
 PREFIX = '!!loc'
-ITEM_PER_PAGE = 10
-HELP_MESSAGE = '''
---------- MCDR 路标插件 v20210101 ---------
-一个位于服务端的路标管理插件
-§7{0}§r 显示此帮助信息
-§7{0} list §6[<可选页号>]§r 列出所有路标
-§7{0} search §b<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项
-§7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
-§7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
-§7{0} del §b<路标名称>§r 删除路标，要求全字匹配
-其中：
-当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
-§b关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
-§e维度id§r参考: 主世界为§e0§r, 下界为§e-1§r, 末地为§e1§r
-'''.strip().format(PREFIX, ITEM_PER_PAGE)
+
 STORAGE_FILE_PATH = os.path.join('config', PLUGIN_METADATA['id'], 'locations.json')
+CONFIG_FILE_PATH = os.path.join('config', PLUGIN_METADATA['id'], 'config.json')
+
+
+class Config:
+	def __init__(self, file_path):
+		self.file_path = file_path
+		self.data = {}
+		self.__default = {
+			'teleport_hint_on_coordinate': True,
+			'item_per_page': 10
+		}
+
+	def load(self, logger=None):
+		self.data = self.__default.copy()
+		folder = os.path.dirname(self.file_path)
+		if not os.path.isdir(folder):
+			os.makedirs(folder)
+		if os.path.isfile(self.file_path):
+			with open(self.file_path, 'r') as file:
+				try:
+					self.data.update(json.load(file))
+				except JSONDecodeError:
+					if logger is not None:
+						logger.warning('配置文件出错，使用默认配置文件')
+		else:
+			if logger is not None:
+				logger.info('未找到配置文件，已自动生成')
+		with open(self.file_path, 'w') as file:
+			json.dump(self.data, file)
+
+	def __getitem__(self, key):
+		return self.data[key]
+
+
+config = Config(CONFIG_FILE_PATH)
 
 
 class LocationStorage:
 	def __init__(self, file_path):
 		self.file_path = file_path
 		self.locations = []  # type: List[Location]
-		self.name_map = {}
+		self.name_map = {}  # type: Dict[str, Location]
 		self.lock = RLock()
 
 	def save(self):
@@ -67,10 +88,12 @@ class LocationStorage:
 
 	def load(self, logger=None):
 		with self.lock:
-			self.locations = []
+			folder = os.path.dirname(self.file_path)
+			if not os.path.isdir(folder):
+				os.makedirs(folder)
+			self.locations.clear()
 			needs_overwrite = False
 			if not os.path.isfile(self.file_path):
-				os.mkdir(os.path.dirname(self.file_path))
 				needs_overwrite = True
 			else:
 				with open(self.file_path, 'r', encoding='utf8') as handle:
@@ -88,15 +111,15 @@ class LocationStorage:
 			if needs_overwrite:
 				self.save()
 
-	def get(self, name):
+	def get(self, name) -> Optional[Location]:
 		with self.lock:
-			return self.name_map.get(name, None)
+			return self.name_map.get(name)
 
-	def get_locations(self):
+	def get_locations(self) -> List[Location]:
 		with self.lock:
 			return self.locations.copy()
 
-	def contains(self, name):
+	def contains(self, name) -> bool:
 		with self.lock:
 			return name in self.name_map
 
@@ -110,12 +133,12 @@ class LocationStorage:
 				self.name_map[location.name] = location
 				return True
 
-	def add(self, location):
+	def add(self, location) -> bool:
 		ret = self.__add(location)
 		self.save()
 		return ret
 
-	def __remove(self, target_name):
+	def __remove(self, target_name) -> Optional[Location]:
 		with self.lock:
 			loc = self.get(target_name)
 			if loc is not None:
@@ -125,7 +148,7 @@ class LocationStorage:
 			else:
 				return None
 
-	def remove(self, target_name):
+	def remove(self, target_name) -> Optional[Location]:
 		ret = self.__remove(target_name)
 		self.save()
 		return ret
@@ -135,7 +158,55 @@ storage = LocationStorage(STORAGE_FILE_PATH)
 
 
 def show_help(source: CommandSource):
-	source.reply(HELP_MESSAGE)
+	source.reply('''
+--------- MCDR 路标插件 v{2} ---------
+一个位于服务端的路标管理插件
+§7{0}§r 显示此帮助信息
+§7{0} list §6[<可选页号>]§r 列出所有路标
+§7{0} search §3<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项
+§7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
+§7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
+§7{0} del §b<路标名称>§r 删除路标，要求全字匹配
+§7{0} info §b<路标名称>§r 显示路标的详情等信息
+§7{0} §3<关键字> §6[<可选页号>]§r 同 §7{0} search§r
+其中：
+当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
+§3关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
+§e维度id§r参考: 主世界为§e0§r, 下界为§e-1§r, 末地为§e1§r
+		'''.strip().format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version'])
+	)
+
+
+def get_coordinate_text(coord: Point, *, color=RColor.green, precision=1):
+	def ltr(text):
+		return RText(text, color=color)
+
+	def ele(value):
+		return RText(str(round(value, precision)), color=color).h(value)
+	return RTextList(ltr('['), ele(coord.x), ltr(', '), ele(coord.y), ltr(', '), ele(coord.z), ltr(']'))
+
+
+def get_dim_key(dim: Union[int, str]) -> str:
+	dimension_convert = {0: 'minecraft:overworld', -1: 'minecraft:the_nether', 1: 'minecraft:the_end'}
+	return dimension_convert.get(dim, dim)
+
+
+def get_dimension_text(dim: Union[int, str]):
+	dim_key = get_dim_key(dim)
+	dimension_color = {
+		'minecraft:overworld': RColor.dark_green,
+		'minecraft:the_nether': RColor.dark_red,
+		'minecraft:the_end': RColor.dark_purple
+	}
+	dimension_translation = {
+		'minecraft:overworld': 'createWorld.customize.preset.overworld',
+		'minecraft:the_nether': 'advancements.nether.root.title',
+		'minecraft:the_end': 'advancements.end.root.title'
+	}
+	if dim_key in dimension_color:
+		return RTextTranslation(dimension_translation[dim_key], color=dimension_color[dim_key]).h(dim_key)
+	else:
+		return RText(dim_key, color=RColor.gray).h(dim_key)
 
 
 def print_location(location, printer: Callable[[RTextBase], Any]):
@@ -145,24 +216,16 @@ def print_location(location, printer: Callable[[RTextBase], Any]):
 	name_text = RText(location.name)
 	if location.description is not None:
 		name_text.h(location.description)
-	dimension_convert = {0: 'minecraft:overworld', -1: 'minecraft:the_nether', 1: 'minecraft:the_end'}
-	dim_key = dimension_convert[location.dimension]
-	dimension_color = {0: RColor.dark_green, -1: RColor.dark_red, 1: RColor.dark_purple}
-	dimension_translation = {
-		0: 'createWorld.customize.preset.overworld',
-		-1: 'advancements.nether.root.title',
-		1: 'advancements.end.root.title'
-	}
+	coordinate_text = get_coordinate_text(location.position)
+	if config['teleport_hint_on_coordinate']:
+		coordinate_text.c(RAction.suggest_command, '/execute in {} run tp {} {} {}'.format(get_dim_key(location.dimension), x, y, z)).h('点击以传送')
 	printer(RTextList(
 		'§7-§r ',
-		name_text,
+		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(PREFIX, location.name)),
 		' ',
-		RText('[{}, {}, {}]'.format(round(x, 1), round(y, 1), round(z, 1)), color=RColor.green).
-			c(RAction.suggest_command, '/execute in {} run tp {} {} {}'.format(dim_key, x, y, z)).
-			h('点击以传送'),
+		coordinate_text,
 		' §7@§r ',
-		RTextTranslation(dimension_translation[location.dimension], color=dimension_color[location.dimension]).
-			h(dim_key)
+		get_dimension_text(location.dimension)
 	))
 
 
@@ -184,7 +247,7 @@ def list_locations(source: CommandSource, *, keyword=None, page=None):
 		for loc in matched_locations:
 			reply_location(source, loc)
 	else:
-		left, right = (page - 1) * ITEM_PER_PAGE, page * ITEM_PER_PAGE
+		left, right = (page - 1) * config['item_per_page'], page * config['item_per_page']
 		for i in range(left, right):
 			if 0 <= i < matched_count:
 				reply_location(source, matched_locations[i])
@@ -244,62 +307,67 @@ def delete_location(source: CommandSource, name):
 		source.reply('未找到路标§b{}§r'.format(name))
 
 
+def show_location_detail(source: CommandSource, name):
+	loc = storage.get(name)
+	if loc is not None:
+		source.reply(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
+		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, precision=4)))
+		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
+		x, y, z = map(round, loc.position)
+		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
+	else:
+		source.reply('未找到路标§b{}§r'.format(name))
+
+
 def on_load(server: ServerInterface, old_inst):
 	server.register_help_message(PREFIX, '路标管理')
-	global storage
+
 	if hasattr(old_inst, 'storage') and type(old_inst.storage) == type(storage):
 		storage.lock = old_inst.storage.lock
 	storage.load(server.logger)
+	config.load(server.logger)
+
+	search_node = QuotableText('keyword').\
+		runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'])).\
+		then(Integer('page').runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'], page=ctx['page'])))
+
 	server.register_command(
 		Literal(PREFIX).
 		runs(show_help).
-		then(
-			Literal('all').runs(lambda src: list_locations(src))
-		).
+		then(Literal('all').runs(lambda src: list_locations(src))).
 		then(
 			Literal('list').runs(lambda src: list_locations(src)).
-			then(
-				Integer('page').runs(lambda src, ctx: list_locations(src, page=ctx['page']))
-			)
+			then(Integer('page').runs(lambda src, ctx: list_locations(src, page=ctx['page'])))
 		).
-		then(
-			Literal('search').then(
-				QuotableText('keyword').runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'])).
-				then(
-					Integer('page').runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'], page=ctx['page']))
-				)
-			)
-		).
+		then(Literal('search').then(search_node)).
+		then(search_node).  # for lazyman
 		then(
 			Literal('add').then(
 				QuotableText('name').
 				then(
-					Literal('here').
-					runs(lambda src, ctx: add_location_here(src, ctx['name'])).
-					then(
-						GreedyText('desc').runs(lambda src, ctx: add_location_here(src, ctx['name'], ctx['desc']))
-					)
+					Literal('here').runs(lambda src, ctx: add_location_here(src, ctx['name'])).
+					then(GreedyText('desc').runs(lambda src, ctx: add_location_here(src, ctx['name'], ctx['desc'])))
 				).
 				then(
-					Number('x').then(
-						Number('y').then(
-							Number('z').then(
-								Integer('dim').in_range(-1, 1).
-								runs(lambda src, ctx: add_location(src, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'])).
-								then(
-									GreedyText('desc').
-									runs(lambda src, ctx: add_location(src, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'], ctx['desc']))
-								)
-							)
+					Number('x').then(Number('y').then(Number('z').then(
+						Integer('dim').in_range(-1, 1).
+						runs(lambda src, ctx: add_location(src, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'])).
+						then(
+							GreedyText('desc').
+							runs(lambda src, ctx: add_location(src, ctx['name'], ctx['x'], ctx['y'], ctx['z'], ctx['dim'], ctx['desc']))
 						)
-					)
+					)))
 				)
 			)
 		).
 		then(
 			Literal('del').then(
-				QuotableText('name').
-				runs(lambda src, ctx: delete_location(src, ctx['name']))
+				QuotableText('name').runs(lambda src, ctx: delete_location(src, ctx['name']))
+			)
+		).
+		then(
+			Literal('info').then(
+				QuotableText('name').runs(lambda src, ctx: show_location_detail(src, ctx['name']))
 			)
 		)
 	)
