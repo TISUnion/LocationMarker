@@ -7,6 +7,10 @@ Inspired by LucunJi's [Locations](https://github.com/TISUnion/Locations) plugin,
 
 Marker data file path: `config/location_marker/locations.json`
 
-Requirements:
+Marker config file path: `config/location_marker/config.json`
+
+## Requirements
+
 - [MCDReforged](https://github.com/Fallen-Breath/MCDReforged) >= 1.0.0
 - [Minecraft Data API](https://github.com/MCDReforged/MinecraftDataAPI)
+
