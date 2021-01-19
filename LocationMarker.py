@@ -9,7 +9,7 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.1.0',
+	'version': '1.1.1',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
 	'author': 'Fallen_Breath',
@@ -177,12 +177,18 @@ def show_help(source: CommandSource):
 	)
 
 
-def get_coordinate_text(coord: Point, *, color=RColor.green, precision=1):
+def get_coordinate_text(coord: Point, dimension, *, color=RColor.green, precision=1):
+	def tp_hint(text):
+		if config['teleport_hint_on_coordinate']:
+			text.c(RAction.suggest_command, '/execute in {} run tp {} {} {}'.format(get_dim_key(dimension), coord.x, coord.y, coord.z)).h('点击以传送')
+		return text
+
 	def ltr(text):
-		return RText(text, color=color)
+		return tp_hint(RText(text, color=color))
 
 	def ele(value):
-		return RText(str(round(value, precision)), color=color).h(value)
+		return tp_hint(RText(str(round(value, precision)), color=color)).h(value)
+
 	return RTextList(ltr('['), ele(coord.x), ltr(', '), ele(coord.y), ltr(', '), ele(coord.z), ltr(']'))
 
 
@@ -210,20 +216,14 @@ def get_dimension_text(dim: Union[int, str]):
 
 
 def print_location(location, printer: Callable[[RTextBase], Any]):
-	x = location.position.x
-	y = location.position.y
-	z = location.position.z
 	name_text = RText(location.name)
 	if location.description is not None:
 		name_text.h(location.description)
-	coordinate_text = get_coordinate_text(location.position)
-	if config['teleport_hint_on_coordinate']:
-		coordinate_text.c(RAction.suggest_command, '/execute in {} run tp {} {} {}'.format(get_dim_key(location.dimension), x, y, z)).h('点击以传送')
 	printer(RTextList(
 		'§7-§r ',
 		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(PREFIX, location.name)),
 		' ',
-		coordinate_text,
+		get_coordinate_text(location.position, location.dimension),
 		' §7@§r ',
 		get_dimension_text(location.dimension)
 	))
@@ -311,7 +311,7 @@ def show_location_detail(source: CommandSource, name):
 	loc = storage.get(name)
 	if loc is not None:
 		source.reply(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
-		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, precision=4)))
+		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
 		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
 		x, y, z = map(round, loc.position)
 		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
