@@ -53,7 +53,7 @@ class Config:
 			if logger is not None:
 				logger.info('未找到配置文件，已自动生成')
 		with open(self.file_path, 'w') as file:
-			json.dump(self.data, file)
+			json.dump(self.data, file, indent=2)
 
 	def __getitem__(self, key):
 		return self.data[key]
