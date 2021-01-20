@@ -9,7 +9,7 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.1.1',
+	'version': '1.1.2',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
 	'author': 'Fallen_Breath',
@@ -315,6 +315,7 @@ def show_location_detail(source: CommandSource, name):
 		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
 		x, y, z = map(round, loc.position)
 		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
+		source.reply('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
 	else:
 		source.reply('未找到路标§b{}§r'.format(name))
 
