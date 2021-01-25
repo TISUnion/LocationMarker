@@ -9,10 +9,13 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.1.2',
+	'version': '1.1.3',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
-	'author': 'Fallen_Breath',
+	'author': [
+		'Fallen_Breath',
+		'Van_Involution'
+	],
 	'link': 'https://github.com/TISUnion/LocationMarker',
 	'dependencies': {
 		'minecraft_data_api': '*',
