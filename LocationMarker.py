@@ -1,6 +1,7 @@
 import collections
 import json
 import os
+import re
 from json import JSONDecodeError
 from threading import RLock
 from typing import List, Callable, Any, Dict, Optional, Union
@@ -168,25 +169,28 @@ def rtext_help_msg(arg: str, help_msg: str):
 
 
 def show_help(source: CommandSource):
-	source.reply(RTextList(f'''
---------- MCDR 路标插件 v{PLUGIN_METADATA["version"]} ---------
-一个位于服务端的路标管理插件
-''',
-		rtext_help_msg('', '显示此帮助信息'),
-		rtext_help_msg(' list', '§6[<可选页号>]§r 列出所有路标'),
-		rtext_help_msg(' search', '§3<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项'),
-		rtext_help_msg(' add', '§b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标'),
-		rtext_help_msg(' add', '§b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标'),
-		rtext_help_msg(' del', '§b<路标名称>§r 删除路标，要求全字匹配'),
-		rtext_help_msg(' info', '§b<路标名称>§r 显示路标的详情等信息'),
-		rtext_help_msg('', f'§3<关键字> §6[<可选页号>]§r 同 §7{PREFIX} search§r'),
-		f'''\n
+	help_msg_lines = '''
+--------- MCDR 路标插件 v{2} ---------
+§7{0}§r 显示此帮助信息
+§7{0} list §6[<可选页号>]§r 列出所有路标
+§7{0} search §3<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项
+§7{0} add §b<路标名称> §e<x> <y> <z> <维度id> §6[<可选注释>]§r 加入一个路标
+§7{0} add §b<路标名称> §ehere §6[<可选注释>]§r 加入自己所处位置、维度的路标
+§7{0} del §b<路标名称>§r 删除路标，要求全字匹配
+§7{0} info §b<路标名称>§r 显示路标的详情等信息
+§7{0} §3<关键字> §6[<可选页号>]§r 同 §7{0} search§r
 其中：
-当§6可选页号§r被指定时，将以每{config["item_per_page"]}个路标为一页，列出指定页号的路标
-§3关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被" "括起的字符串
-§e维度id§r参考: 主世界为§e0§r, 下界为§e-1§r, 末地为§e1§r
-'''
-	))
+当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
+§3关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
+'''.format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version']).splitlines(True)
+	help_msg_rtext = RTextList()
+	for line in help_msg_lines:
+		reeeee = re.match(r'^§7!!loc[^§]*§', line)
+		if reeeee is not None:
+			help_msg_rtext.append(RText(line).c(RAction.suggest_command, reeeee.group().lstrip('§7').rstrip(' §')))
+		else:
+			help_msg_rtext.append(line)
+	source.reply(help_msg_rtext)
 
 
 def get_coordinate_text(coord: Point, dimension, *, color=RColor.green, precision=1):
