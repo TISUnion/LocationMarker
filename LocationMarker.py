@@ -161,16 +161,10 @@ class LocationStorage:
 storage = LocationStorage(STORAGE_FILE_PATH)
 
 
-def rtext_help_msg(arg: str, help_msg: str):
-	cmd = RText(text=f'{PREFIX}{arg}', color=RColor.gray) \
-		.h(f'将"{PREFIX}{arg}"填入聊天框') \
-		.c(action=RAction.suggest_command, value=f'{PREFIX}{arg}')
-	return RTextList('\n', cmd, ' ', RText(text=help_msg))
-
-
 def show_help(source: CommandSource):
 	help_msg_lines = '''
 --------- MCDR 路标插件 v{2} ---------
+一个位于服务端的路标管理插件
 §7{0}§r 显示此帮助信息
 §7{0} list §6[<可选页号>]§r 列出所有路标
 §7{0} search §3<关键字> §6[<可选页号>]§r 搜索坐标，返回所有匹配项
