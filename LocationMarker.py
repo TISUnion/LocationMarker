@@ -1,6 +1,7 @@
 import collections
 import json
 import os
+import re
 from json import JSONDecodeError
 from threading import RLock
 from typing import List, Callable, Any, Dict, Optional, Union
@@ -9,10 +10,13 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.2.1',
+	'version': '1.3.0',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
-	'author': 'Fallen_Breath',
+	'author': [
+		'Fallen_Breath',
+		'Van_Involution'
+	],
 	'link': 'https://github.com/TISUnion/LocationMarker',
 	'dependencies': {
 		'minecraft_data_api': '*',
@@ -158,7 +162,7 @@ storage = LocationStorage(STORAGE_FILE_PATH)
 
 
 def show_help(source: CommandSource):
-	source.reply('''
+	help_msg_lines = '''
 --------- MCDR 路标插件 v{2} ---------
 一个位于服务端的路标管理插件
 §7{0}§r 显示此帮助信息
@@ -172,9 +176,15 @@ def show_help(source: CommandSource):
 其中：
 当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
 §3关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
-§e维度id§r参考: 主世界为§e0§r, 下界为§e-1§r, 末地为§e1§r
-		'''.strip().format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version'])
-	)
+'''.format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version']).splitlines(True)
+	help_msg_rtext = RTextList()
+	for line in help_msg_lines:
+		reeeee = re.search(r'(?<=§7)!!loc[\w ]*(?=§)', line)
+		if reeeee is not None:
+			help_msg_rtext.append(RText(line).c(RAction.suggest_command, reeeee.group()))
+		else:
+			help_msg_rtext.append(line)
+	source.reply(help_msg_rtext)
 
 
 def get_coordinate_text(coord: Point, dimension, *, color=RColor.green, precision=1):
