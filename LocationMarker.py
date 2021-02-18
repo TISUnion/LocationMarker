@@ -179,9 +179,9 @@ def show_help(source: CommandSource):
 '''.format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version']).splitlines(True)
 	help_msg_rtext = RTextList()
 	for line in help_msg_lines:
-		reeeee = re.search(r'(?<=§7)!!loc[\w ]*(?=§)', line)
-		if reeeee is not None:
-			help_msg_rtext.append(RText(line).c(RAction.suggest_command, reeeee.group()))
+		result = re.search(r'(?<=§7)!!loc[\w ]*(?=§)', line)
+		if result is not None:
+			help_msg_rtext.append(RText(line).c(RAction.suggest_command, result.group()).h('点击以填入 §7{}§r'.format(result.group())))
 		else:
 			help_msg_rtext.append(line)
 	source.reply(help_msg_rtext)
@@ -225,26 +225,28 @@ def get_dimension_text(dim: Union[int, str]):
 		return RText(dim_key, color=RColor.gray).h(dim_key)
 
 
-def print_location(location, printer: Callable[[RTextBase], Any]):
+def print_location(location, printer: Callable[[RTextBase], Any], *, show_list_symbol: bool):
 	name_text = RText(location.name)
 	if location.description is not None:
 		name_text.h(location.description)
-	printer(RTextList(
-		'§7-§r ',
+	text = RTextList(
 		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(PREFIX, location.name)),
 		' ',
 		get_coordinate_text(location.position, location.dimension),
 		' §7@§r ',
 		get_dimension_text(location.dimension)
-	))
+	)
+	if show_list_symbol:
+		text = RText('- ', color=RColor.gray) + text
+	printer(text)
 
 
-def reply_location(source: CommandSource, location):
-	print_location(location, lambda msg: source.reply(msg))
+def reply_location_as_item(source: CommandSource, location):
+	print_location(location, lambda msg: source.reply(msg), show_list_symbol=True)
 
 
 def broadcast_location(server: ServerInterface, location):
-	print_location(location, lambda msg: server.say(msg))
+	print_location(location, lambda msg: server.say(msg), show_list_symbol=False)
 
 
 def list_locations(source: CommandSource, *, keyword=None, page=None):
@@ -255,12 +257,12 @@ def list_locations(source: CommandSource, *, keyword=None, page=None):
 	matched_count = len(matched_locations)
 	if page is None:
 		for loc in matched_locations:
-			reply_location(source, loc)
+			reply_location_as_item(source, loc)
 	else:
 		left, right = (page - 1) * config['item_per_page'], page * config['item_per_page']
 		for i in range(left, right):
 			if 0 <= i < matched_count:
-				reply_location(source, matched_locations[i])
+				reply_location_as_item(source, matched_locations[i])
 
 		has_prev = 0 < left < matched_count
 		has_next = 0 < right < matched_count
@@ -320,14 +322,15 @@ def delete_location(source: CommandSource, name):
 def show_location_detail(source: CommandSource, name):
 	loc = storage.get(name)
 	if loc is not None:
-		source.get_server().say(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
-		source.get_server().say(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
-		source.get_server().say(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
+		broadcast_location(source.get_server(), loc)
+		source.reply(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
+		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
+		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
 		x, y, z = map(round, loc.position)
-		source.get_server().say('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
-		source.get_server().say('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
+		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
+		source.reply('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
 		# <Location Marker> xaero-waypoint:test:T:9987:71:9923:6:false:0:Internal-overworld-waypoints
-		source.get_server().say('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(PLUGIN_METADATA['name'], loc.name, loc.name[0], x, y, z, get_dim_key(loc.dimension).replace('minecraft:', '')))
+		source.reply('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(PLUGIN_METADATA['name'], loc.name, loc.name[0], x, y, z, get_dim_key(loc.dimension).replace('minecraft:', '')))
 	else:
 		source.reply('未找到路标§b{}§r'.format(name))
 
