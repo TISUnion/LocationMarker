@@ -9,7 +9,7 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'location_marker',
-	'version': '1.2.0',
+	'version': '1.2.1',
 	'name': 'Location Marker',
 	'description': 'A server side waypoint manager',
 	'author': 'Fallen_Breath',
@@ -310,14 +310,14 @@ def delete_location(source: CommandSource, name):
 def show_location_detail(source: CommandSource, name):
 	loc = storage.get(name)
 	if loc is not None:
-		source.reply(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
-		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
-		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
+		source.get_server().say(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
+		source.get_server().say(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
+		source.get_server().say(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
 		x, y, z = map(round, loc.position)
-		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
-		source.reply('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
+		source.get_server().say('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
+		source.get_server().say('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
 		# <Location Marker> xaero-waypoint:test:T:9987:71:9923:6:false:0:Internal-overworld-waypoints
-		source.get_server().broadcast('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(PLUGIN_METADATA['name'], loc.name, loc.name[0], x, y, z, get_dim_key(loc.dimension).replace('minecraft:', '')))
+		source.get_server().say('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(PLUGIN_METADATA['name'], loc.name, loc.name[0], x, y, z, get_dim_key(loc.dimension).replace('minecraft:', '')))
 	else:
 		source.reply('未找到路标§b{}§r'.format(name))
 
