@@ -1,164 +1,21 @@
-import collections
-import json
 import os
 import re
-from json import JSONDecodeError
-from threading import RLock
-from typing import List, Callable, Any, Dict, Optional, Union
+from typing import Callable, Any, Optional, Union
 
 from mcdreforged.api.all import *
 
-PLUGIN_METADATA = {
-	'id': 'location_marker',
-	'version': '1.3.0',
-	'name': 'Location Marker',
-	'description': 'A server side waypoint manager',
-	'author': [
-		'Fallen_Breath',
-		'Van_Involution'
-	],
-	'link': 'https://github.com/TISUnion/LocationMarker',
-	'dependencies': {
-		'minecraft_data_api': '*',
-	}
-}
-
-Point = collections.namedtuple('Point', 'x y z')
-Location = collections.namedtuple('Location', 'name description dimension position')
-
-PREFIX = '!!loc'
-
-STORAGE_FILE_PATH = os.path.join('config', PLUGIN_METADATA['id'], 'locations.json')
-CONFIG_FILE_PATH = os.path.join('config', PLUGIN_METADATA['id'], 'config.json')
+from location_marker import constants
+from location_marker.storage import LocationStorage, Point, Location
 
 
-class Config:
-	def __init__(self, file_path):
-		self.file_path = file_path
-		self.data = {}
-		self.__default = {
-			'teleport_hint_on_coordinate': True,
-			'item_per_page': 10
-		}
-
-	def load(self, logger=None):
-		self.data = self.__default.copy()
-		folder = os.path.dirname(self.file_path)
-		if not os.path.isdir(folder):
-			os.makedirs(folder)
-		if os.path.isfile(self.file_path):
-			with open(self.file_path, 'r') as file:
-				try:
-					self.data.update(json.load(file))
-				except JSONDecodeError:
-					if logger is not None:
-						logger.warning('配置文件出错，使用默认配置文件')
-		else:
-			if logger is not None:
-				logger.info('未找到配置文件，已自动生成')
-		with open(self.file_path, 'w') as file:
-			json.dump(self.data, file, indent=2)
-
-	def __getitem__(self, key):
-		return self.data[key]
+class Config(Serializable):
+	teleport_hint_on_coordinate: bool = True
+	item_per_page: int = 10
 
 
-config = Config(CONFIG_FILE_PATH)
-
-
-class LocationStorage:
-	def __init__(self, file_path):
-		self.file_path = file_path
-		self.locations = []  # type: List[Location]
-		self.name_map = {}  # type: Dict[str, Location]
-		self.lock = RLock()
-
-	def save(self):
-		with self.lock:
-			output = []
-			for loc in self.locations:
-				output.append({
-					'name': loc.name,
-					'dim': loc.dimension,
-					'desc': loc.description,
-					'pos': {
-						'x': loc.position.x,
-						'y': loc.position.y,
-						'z': loc.position.z
-					}
-				})
-			with open(self.file_path, 'w', encoding='utf8') as handle:
-				handle.write(json.dumps(output, indent=2, ensure_ascii=False))
-
-	def load(self, logger=None):
-		with self.lock:
-			folder = os.path.dirname(self.file_path)
-			if not os.path.isdir(folder):
-				os.makedirs(folder)
-			self.locations.clear()
-			needs_overwrite = False
-			if not os.path.isfile(self.file_path):
-				needs_overwrite = True
-			else:
-				with open(self.file_path, 'r', encoding='utf8') as handle:
-					try:
-						for loc in json.load(handle):
-							self.__add(Location(
-								name=loc['name'],
-								description=loc.get('desc', None),
-								dimension=loc['dim'],
-								position=Point(loc['pos']['x'], loc['pos']['y'], loc['pos']['z'])
-							))
-					except Exception as e:
-						(logger.error if logger is not None else print)('Fail to load {}: {}'.format(self.file_path, e))
-						needs_overwrite = True
-			if needs_overwrite:
-				self.save()
-
-	def get(self, name) -> Optional[Location]:
-		with self.lock:
-			return self.name_map.get(name)
-
-	def get_locations(self) -> List[Location]:
-		with self.lock:
-			return self.locations.copy()
-
-	def contains(self, name) -> bool:
-		with self.lock:
-			return name in self.name_map
-
-	def __add(self, location):
-		with self.lock:
-			existed = self.get(location.name)
-			if existed:
-				return False
-			else:
-				self.locations.append(location)
-				self.name_map[location.name] = location
-				return True
-
-	def add(self, location) -> bool:
-		ret = self.__add(location)
-		self.save()
-		return ret
-
-	def __remove(self, target_name) -> Optional[Location]:
-		with self.lock:
-			loc = self.get(target_name)
-			if loc is not None:
-				self.locations.remove(loc)
-				self.name_map.pop(loc.name)
-				return loc
-			else:
-				return None
-
-	def remove(self, target_name) -> Optional[Location]:
-		ret = self.__remove(target_name)
-		self.save()
-		return ret
-
-
-storage = LocationStorage(STORAGE_FILE_PATH)
+config: Config
+storage = LocationStorage()
+server_inst: PluginServerInterface
 
 
 def show_help(source: CommandSource):
@@ -176,7 +33,7 @@ def show_help(source: CommandSource):
 其中：
 当§6可选页号§r被指定时，将以每{1}个路标为一页，列出指定页号的路标
 §3关键字§r以及§b路标名称§r为不包含空格的一个字符串，或者一个被""括起的字符串
-'''.format(PREFIX, config['item_per_page'], PLUGIN_METADATA['version']).splitlines(True)
+'''.format(constants.PREFIX, config.item_per_page, server_inst.get_self_metadata().version).splitlines(True)
 	help_msg_rtext = RTextList()
 	for line in help_msg_lines:
 		result = re.search(r'(?<=§7)!!loc[\w ]*(?=§)', line)
@@ -187,9 +44,9 @@ def show_help(source: CommandSource):
 	source.reply(help_msg_rtext)
 
 
-def get_coordinate_text(coord: Point, dimension, *, color=RColor.green, precision=1):
+def get_coordinate_text(coord: Point, dimension: int, *, color=RColor.green, precision: int = 1):
 	def tp_hint(text):
-		if config['teleport_hint_on_coordinate']:
+		if config.teleport_hint_on_coordinate:
 			text.c(RAction.suggest_command, '/execute in {} run tp {} {} {}'.format(get_dim_key(dimension), coord.x, coord.y, coord.z)).h('点击以传送')
 		return text
 
@@ -207,7 +64,7 @@ def get_dim_key(dim: Union[int, str]) -> str:
 	return dimension_convert.get(dim, dim)
 
 
-def get_dimension_text(dim: Union[int, str]):
+def get_dimension_text(dim: Union[int, str]) -> RTextBase:
 	dim_key = get_dim_key(dim)
 	dimension_color = {
 		'minecraft:overworld': RColor.dark_green,
@@ -225,41 +82,41 @@ def get_dimension_text(dim: Union[int, str]):
 		return RText(dim_key, color=RColor.gray).h(dim_key)
 
 
-def print_location(location, printer: Callable[[RTextBase], Any], *, show_list_symbol: bool):
+def print_location(location: Location, printer: Callable[[RTextBase], Any], *, show_list_symbol: bool):
 	name_text = RText(location.name)
-	if location.description is not None:
-		name_text.h(location.description)
+	if location.desc is not None:
+		name_text.h(location.desc)
 	text = RTextList(
-		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(PREFIX, location.name)),
+		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(constants.PREFIX, location.name)),
 		' ',
-		get_coordinate_text(location.position, location.dimension),
+		get_coordinate_text(location.pos, location.dim),
 		' §7@§r ',
-		get_dimension_text(location.dimension)
+		get_dimension_text(location.dim)
 	)
 	if show_list_symbol:
 		text = RText('- ', color=RColor.gray) + text
 	printer(text)
 
 
-def reply_location_as_item(source: CommandSource, location):
+def reply_location_as_item(source: CommandSource, location: Location):
 	print_location(location, lambda msg: source.reply(msg), show_list_symbol=True)
 
 
-def broadcast_location(server: ServerInterface, location):
+def broadcast_location(server: ServerInterface, location: Location):
 	print_location(location, lambda msg: server.say(msg), show_list_symbol=False)
 
 
-def list_locations(source: CommandSource, *, keyword=None, page=None):
+def list_locations(source: CommandSource, *, keyword: Optional[str] = None, page: Optional[int] = None):
 	matched_locations = []
 	for loc in storage.get_locations():
-		if keyword is None or loc.name.find(keyword) != -1 or (loc.description is not None and loc.description.find(keyword) != -1):
+		if keyword is None or loc.name.find(keyword) != -1 or (loc.desc is not None and loc.desc.find(keyword) != -1):
 			matched_locations.append(loc)
 	matched_count = len(matched_locations)
 	if page is None:
 		for loc in matched_locations:
 			reply_location_as_item(source, loc)
 	else:
-		left, right = (page - 1) * config['item_per_page'], page * config['item_per_page']
+		left, right = (page - 1) * config.item_per_page, page * config.item_per_page
 		for i in range(left, right):
 			if 0 <= i < matched_count:
 				reply_location_as_item(source, matched_locations[i])
@@ -269,10 +126,10 @@ def list_locations(source: CommandSource, *, keyword=None, page=None):
 		color = {False: RColor.dark_gray, True: RColor.gray}
 		prev_page = RText('<-', color=color[has_prev])
 		if has_prev:
-			prev_page.c(RAction.run_command, '{} list {}'.format(PREFIX, page - 1)).h('点击显示上一页')
+			prev_page.c(RAction.run_command, '{} list {}'.format(constants.PREFIX, page - 1)).h('点击显示上一页')
 		next_page = RText('->', color=color[has_next])
 		if has_next:
-			next_page.c(RAction.run_command, '{} list {}'.format(PREFIX, page + 1)).h('点击显示下一页')
+			next_page.c(RAction.run_command, '{} list {}'.format(constants.PREFIX, page + 1)).h('点击显示下一页')
 
 		source.reply(RTextList(
 			prev_page,
@@ -290,10 +147,11 @@ def add_location(source: CommandSource, name, x, y, z, dim, desc=None):
 		source.reply('路标§b{}§r已存在，无法添加'.format(name))
 		return
 	try:
-		location = Location(name, desc, dim, Point(x, y, z))
+		location = Location(name=name, desc=desc, dim=dim, pos=Point(x=x, y=y, z=z))
 		storage.add(location)
 	except Exception as e:
 		source.reply('路标§b{}§r添加§c失败§r: {}'.format(name, e))
+		server_inst.logger.exception('Failed to add location {}'.format(name))
 	else:
 		source.get_server().say('路标§b{}§r添加§a成功'.format(name))
 		broadcast_location(source.get_server(), location)
@@ -324,31 +182,30 @@ def show_location_detail(source: CommandSource, name):
 	if loc is not None:
 		broadcast_location(source.get_server(), loc)
 		source.reply(RTextList('路标名: ', RText(loc.name, color=RColor.aqua)))
-		source.reply(RTextList('坐标: ', get_coordinate_text(loc.position, loc.dimension, precision=4)))
-		source.reply(RTextList('详情: ', RText(loc.description if loc.description is not None else '无', color=RColor.gray)))
-		x, y, z = map(round, loc.position)
-		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dimension))
-		source.reply('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dimension)))
+		source.reply(RTextList('坐标: ', get_coordinate_text(loc.pos, loc.dim, precision=4)))
+		source.reply(RTextList('详情: ', RText(loc.desc if loc.desc is not None else '无', color=RColor.gray)))
+		x, y, z = map(round, loc.pos)
+		source.reply('VoxelMap路标: [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, loc.dim))
+		source.reply('VoxelMap路标(1.16+): [name:{}, x:{}, y:{}, z:{}, dim:{}]'.format(loc.name, x, y, z, get_dim_key(loc.dim)))
 		# <Location Marker> xaero-waypoint:test:T:9987:71:9923:6:false:0:Internal-overworld-waypoints
-		source.reply('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(PLUGIN_METADATA['name'], loc.name, loc.name[0], x, y, z, get_dim_key(loc.dimension).replace('minecraft:', '')))
+		source.reply('<{}> xaero-waypoint:{}:{}:{}:{}:{}:6:false:0:Internal-{}-waypoints'.format(server_inst.get_self_metadata().name, loc.name, loc.name[0], x, y, z, get_dim_key(loc.dim).replace('minecraft:', '')))
 	else:
 		source.reply('未找到路标§b{}§r'.format(name))
 
 
-def on_load(server: ServerInterface, old_inst):
-	server.register_help_message(PREFIX, '路标管理')
+def on_load(server: PluginServerInterface, old_inst):
+	global config, storage, server_inst
+	server_inst = server
+	config = server.load_config_simple(constants.CONFIG_FILE, target_class=Config)
+	storage.load(os.path.join(server.get_data_folder(), constants.STORAGE_FILE))
 
-	if hasattr(old_inst, 'storage') and type(old_inst.storage) == type(storage):
-		storage.lock = old_inst.storage.lock
-	storage.load(server.logger)
-	config.load(server.logger)
-
+	server.register_help_message(constants.PREFIX, '路标管理')
 	search_node = QuotableText('keyword').\
 		runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'])).\
 		then(Integer('page').runs(lambda src, ctx: list_locations(src, keyword=ctx['keyword'], page=ctx['page'])))
 
 	server.register_command(
-		Literal(PREFIX).
+		Literal(constants.PREFIX).
 		runs(show_help).
 		then(Literal('all').runs(lambda src: list_locations(src))).
 		then(
