@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from typing import Callable, Any, Optional, Union
@@ -116,6 +117,11 @@ def list_locations(source: CommandSource, *, keyword: Optional[str] = None, page
 		for loc in matched_locations:
 			reply_location_as_item(source, loc)
 	else:
+		command_base = constants.PREFIX
+		if keyword is None:
+			command_base += ' list'
+		else:
+			command_base += ' search {}'.format(json.dumps(keyword, ensure_ascii=False))
 		left, right = (page - 1) * config.item_per_page, page * config.item_per_page
 		for i in range(left, right):
 			if 0 <= i < matched_count:
@@ -126,10 +132,10 @@ def list_locations(source: CommandSource, *, keyword: Optional[str] = None, page
 		color = {False: RColor.dark_gray, True: RColor.gray}
 		prev_page = RText('<-', color=color[has_prev])
 		if has_prev:
-			prev_page.c(RAction.run_command, '{} list {}'.format(constants.PREFIX, page - 1)).h('点击显示上一页')
+			prev_page.c(RAction.run_command, '{} {}'.format(command_base, page - 1)).h('点击显示上一页')
 		next_page = RText('->', color=color[has_next])
 		if has_next:
-			next_page.c(RAction.run_command, '{} list {}'.format(constants.PREFIX, page + 1)).h('点击显示下一页')
+			next_page.c(RAction.run_command, '{} {}'.format(command_base, page + 1)).h('点击显示下一页')
 
 		source.reply(RTextList(
 			prev_page,
