@@ -73,7 +73,7 @@ def get_dimension_text(dim: Union[int, str]) -> RTextBase:
 		'minecraft:the_end': RColor.dark_purple
 	}
 	dimension_translation = {
-		'minecraft:overworld': 'createWorld.customize.preset.overworld',
+		'minecraft:overworld': 'flat_world_preset.minecraft.overworld',
 		'minecraft:the_nether': 'advancements.nether.root.title',
 		'minecraft:the_end': 'advancements.end.root.title'
 	}

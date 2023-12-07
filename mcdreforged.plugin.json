@@ -1,6 +1,6 @@
 {
 	"id": "location_marker",
-	"version": "1.3.2",
+	"version": "1.3.3",
 	"name": "Location Marker",
 	"description": {
 		"en_us": "A server side waypoint manager",
