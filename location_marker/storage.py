@@ -1,7 +1,7 @@
 import json
 import os
 from threading import RLock
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 from mcdreforged.api.all import *
 
@@ -20,7 +20,7 @@ class Point(Serializable):
 class Location(Serializable):
 	name: str
 	desc: Optional[str] = None
-	dim: int
+	dim: Union[int, str]
 	pos: Point
 
 	@staticmethod
