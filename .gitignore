@@ -1,6 +1,6 @@
 .idea/
 utils/
-command_builder.py
 locations.json
 locations.py
 *.mcdr
+*.py[cod]
