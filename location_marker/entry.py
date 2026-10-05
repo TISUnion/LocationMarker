@@ -65,6 +65,42 @@ def get_dim_key(dim: Union[int, str]) -> str:
 	return dimension_convert.get(dim, dim)
 
 
+def is_mc_1_19_plus(mc_version: Optional[str] = None) -> bool:
+	if mc_version is None:
+		mc_version = ServerInterface.si().get_server_information().version
+	if mc_version is None:
+		return False
+	parts = mc_version.split(' ', 1)[0].split('-', 1)[0].split('.')
+	try:
+		nums = tuple(int(part) for part in parts)
+	except ValueError:
+		return ' ' not in mc_version and len(mc_version) == 6 and mc_version >= '22w19a'
+	return nums >= (1, 19)
+
+
+def __test_is_mc_1_19_plus():
+	assert is_mc_1_19_plus('1.19')
+	assert is_mc_1_19_plus('1.19.0')
+	assert is_mc_1_19_plus('1.19.4')
+	assert is_mc_1_19_plus('1.20.1')
+	assert is_mc_1_19_plus('26.1')
+	assert is_mc_1_19_plus('26.1 foobar')
+	assert not is_mc_1_19_plus('1.18.2')
+	assert not is_mc_1_19_plus('1.9')
+	assert is_mc_1_19_plus('1.19-pre1')
+	assert is_mc_1_19_plus('1.19-rc1')
+	assert is_mc_1_19_plus('1.20.1 extra info')
+	assert not is_mc_1_19_plus('1.18.2-pre1')
+	assert not is_mc_1_19_plus('22w18a')
+	assert is_mc_1_19_plus('22w19a')
+	assert is_mc_1_19_plus('22w19b')
+	assert is_mc_1_19_plus('23w01a')
+	assert not is_mc_1_19_plus('')
+
+
+__test_is_mc_1_19_plus()
+
+
 def get_dimension_text(dim: Union[int, str]) -> RTextBase:
 	dim_key = get_dim_key(dim)
 	dimension_color = {
@@ -77,6 +113,8 @@ def get_dimension_text(dim: Union[int, str]) -> RTextBase:
 		'minecraft:the_nether': 'advancements.nether.root.title',
 		'minecraft:the_end': 'advancements.end.root.title'
 	}
+	if is_mc_1_19_plus():
+		dimension_translation['minecraft:overworld'] = 'flat_world_preset.minecraft.overworld'
 	if dim_key in dimension_color:
 		return RTextTranslation(dimension_translation[dim_key], color=dimension_color[dim_key]).h(dim_key)
 	else:
