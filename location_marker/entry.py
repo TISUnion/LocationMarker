@@ -88,7 +88,7 @@ def print_location(location: Location, printer: Callable[[RTextBase], Any], *, s
 	if location.desc is not None:
 		name_text.h(location.desc)
 	text = RTextList(
-		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(constants.PREFIX, location.name)),
+		name_text.h('点击以显示详情').c(RAction.run_command, '{} info {}'.format(constants.PREFIX, json.dumps(location.name, ensure_ascii=False))),
 		' ',
 		get_coordinate_text(location.pos, location.dim),
 		' §7@§r ',
